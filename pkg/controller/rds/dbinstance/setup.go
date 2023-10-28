@@ -30,6 +30,7 @@ import (
 	"github.com/crossplane-contrib/provider-aws/apis/v1alpha1"
 	aws "github.com/crossplane-contrib/provider-aws/pkg/clients"
 	dbinstance "github.com/crossplane-contrib/provider-aws/pkg/clients/rds"
+	svcutils "github.com/crossplane-contrib/provider-aws/pkg/controller/rds"
 	"github.com/crossplane-contrib/provider-aws/pkg/controller/rds/utils"
 	"github.com/crossplane-contrib/provider-aws/pkg/features"
 )
@@ -449,6 +450,15 @@ func (e *custom) isUpToDate(cr *svcapitypes.DBInstance, out *svcsdk.DescribeDBIn
 		cmpopts.IgnoreFields(svcapitypes.CustomDBInstanceParameters{}, "VPCSecurityGroupIDs"),
 		cmpopts.IgnoreFields(svcapitypes.CustomDBInstanceParameters{}, "DeleteAutomatedBackups"),
 	)
+
+	// for tagging: at least one option must be added, modified, or removed.
+	tagsUpToDate, _ := svcutils.AreTagsUpToDate(e.client, cr.Spec.ForProvider.Tags, cr.Status.AtProvider.DBInstanceARN)
+	if !tagsUpToDate {
+		err := svcutils.UpdateTagsForResource(e.client, cr.Spec.ForProvider.Tags, cr.Status.AtProvider.DBInstanceARN)
+		if err != nil {
+			return true, aws.Wrap(err, errDescribe)
+		}
+	}
 
 	if diff == "" && !maintenanceWindowChanged && !backupWindowChanged && !versionChanged && !vpcSGsChanged && !dbParameterGroupChanged && !optionGroupChanged {
 		return true, nil
